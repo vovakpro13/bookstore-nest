@@ -16,9 +16,11 @@ export class UsersService {
         return newUser;
     }
 
-    async checkUserUnicity(data?: { email?: string; username?: string }) {
-        const user = await this.userModel.findOne(data).exec();
+    async getUserById(id: string) {
+        return await this.userModel.findById(id).exec();
+    }
 
-        return user;
+    async checkUserUnicity(data?: { email?: string; username?: string }) {
+        return await this.userModel.findOne(data).exec();
     }
 }

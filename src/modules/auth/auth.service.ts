@@ -1,4 +1,4 @@
-import { ForbiddenException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { ForbiddenException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UserDto } from '../users/dto/user.dto';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -22,25 +22,13 @@ export class AuthService {
         const isUsernameExist = await this.userService.checkUserUnicity({ username });
 
         if (isUsernameExist) {
-            throw new HttpException(
-                {
-                    status: HttpStatus.CONFLICT,
-                    error: `User with username \'${username}\' already exist`,
-                },
-                HttpStatus.CONFLICT
-            );
+            throw new ForbiddenException(`User with username \'${username}\' already exist`);
         }
 
         const isEmailExist = await this.userService.checkUserUnicity({ email });
 
         if (isEmailExist) {
-            throw new HttpException(
-                {
-                    status: HttpStatus.CONFLICT,
-                    error: `User with email \'${email}\' already exist`,
-                },
-                HttpStatus.CONFLICT
-            );
+            throw new ForbiddenException(`User with email \'${email}\' already exist`);
         }
 
         userData.password = await this.hashData(userData.password);
@@ -63,11 +51,11 @@ export class AuthService {
             foundUser = await this.userService.checkUserUnicity({ email });
         }
 
-        if (!foundUser) throw new ForbiddenException('Access Denied');
+        if (!foundUser) throw new ForbiddenException('Incorrect password or login value');
 
         const passwordMatches = await bcrypt.compare(password, foundUser.password);
 
-        if (!passwordMatches) throw new ForbiddenException('Access Denied');
+        if (!passwordMatches) throw new ForbiddenException('Incorrect password or login value');
 
         const { id: userId } = foundUser;
 
@@ -76,12 +64,25 @@ export class AuthService {
         return { ...tokens, userId };
     }
 
-    logout() {
-        return 'logout';
-    }
+    async clearTokensPair(
+        userId: string,
+        userToken: string,
+        tokenKey: 'accessToken' | 'refreshToken'
+    ) {
+        const tokens = await this.tokensService.getTokens(userId);
 
-    refreshTokens() {
-        return 'refresh';
+        if (!tokens || !tokens.accessToken || !tokens.refreshToken) {
+            throw new UnauthorizedException('Access Denied');
+        }
+
+        const atMatches = await bcrypt.compare(userToken, tokens[tokenKey]);
+
+        if (!atMatches) {
+            throw new UnauthorizedException('Tokens don`t matches.');
+        }
+
+        await this.tokensService.removeTokens(userId);
+        return HttpStatus.NO_CONTENT;
     }
 
     async generateTokens(userId): Promise<Tokens> {
