@@ -1,10 +1,8 @@
 import {
     Body,
     Controller,
-    ForbiddenException,
     HttpCode,
     HttpStatus,
-    NotFoundException,
     Param,
     Post,
     Req,
@@ -84,6 +82,7 @@ export class AuthController {
 
         await this.authService.clearTokensPair(userId, refreshToken, TokensEnum.refreshToken);
 
-        return this.authService.generateTokens(userId);
+        const tokens = await this.authService.generateTokens(userId);
+        return { ...tokens, userId };
     }
 }
