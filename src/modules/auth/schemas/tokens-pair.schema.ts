@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { User } from './user.schema';
+import { User } from '../../users/schemas/user.schema';
 import * as mongoose from 'mongoose';
 
 export type TokensPairDocument = TokensPair & Document;

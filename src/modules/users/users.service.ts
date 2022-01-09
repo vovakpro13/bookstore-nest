@@ -21,6 +21,6 @@ export class UsersService {
     }
 
     async checkUserUnicity(data?: { email?: string; username?: string }) {
-        return await this.userModel.findOne(data).exec();
+        return this.userModel.findOne(data).exec();
     }
 }

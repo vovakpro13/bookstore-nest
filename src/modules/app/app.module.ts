@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AtGuard } from 'src/common/guards';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { AtGuard } from 'src/common/guards';
             useNewUrlParser: true,
         }),
         AuthModule,
+        MailModule,
     ],
     providers: [
         {

@@ -1,10 +1,12 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
+import { TokensService } from 'src/modules/auth/token-pairs.service';
+import { TokensEnum } from 'src/modules/auth/types/tokens.type';
 
 @Injectable()
 export class AtGuard extends AuthGuard('jwt') {
-    constructor(private reflector: Reflector) {
+    constructor(private reflector: Reflector, private tokensService: TokensService) {
         super();
     }
 
@@ -16,6 +18,30 @@ export class AtGuard extends AuthGuard('jwt') {
 
         if (isPublic) return true;
 
-        return super.canActivate(context);
+        const isOnlyOwner = this.reflector.getAllAndOverride('isOnlyOwner', [
+            context.getHandler(),
+            context.getClass(),
+        ]);
+
+        const isValid = super.canActivate(context);
+
+        if (isValid) {
+            if (isOnlyOwner) {
+                const req = context.switchToHttp().getRequest();
+
+                const accessToken = req.headers.authorization.replace('Bearer', '').trim();
+                const userId = req.params.userId;
+
+                return this.tokensService.compareTokens(
+                    userId,
+                    accessToken,
+                    TokensEnum.accessToken
+                );
+            }
+
+            return isValid;
+        }
+
+        return false;
     }
 }

@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, UpdateWriteOpResult } from 'mongoose';
-import { Tokens } from '../auth/types/tokens.type';
+import { Tokens, TokensEnum } from './types/tokens.type';
 import { TokensPair, TokensPairDocument } from './schemas/tokens-pair.schema';
 import * as bcrypt from 'bcrypt';
 
@@ -25,6 +25,16 @@ export class TokensService {
 
     async getTokens(userId: string): Promise<TokensPairDocument> {
         return await this.tokensPairModel.findOne({ userId }).exec();
+    }
+
+    async compareTokens(userId: string, userToken, tokenKey: TokensEnum): Promise<boolean> {
+        const tokens = await this.getTokens(userId);
+
+        if (!tokens || !tokens.accessToken || !tokens.refreshToken) {
+            throw new UnauthorizedException('Access Denied');
+        }
+
+        return bcrypt.compare(userToken, tokens[tokenKey]);
     }
 
     async removeTokens(userId: string): Promise<void> {

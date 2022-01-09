@@ -1,20 +1,78 @@
-import { ForbiddenException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+    ForbiddenException,
+    HttpStatus,
+    Injectable,
+    NotFoundException,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { UserDto } from '../users/dto/user.dto';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
-import { Tokens } from './types/tokens.type';
+import { Tokens, TokensEnum } from './types/tokens.type';
 import { JwtService } from '@nestjs/jwt';
-import { TokensService } from '../users/token-pairs.service';
+import { TokensService } from './token-pairs.service';
 import { AuthDto } from './dto/auth.dto';
 import { AuthResponse } from './types/auth-response.type';
+import { UserUniqueDto } from './dto/user-unique.dto';
+import { UserUniqueResponse } from './types/user-unique-response.type';
+import { SendCodeResponseType } from './types/send-code-response.type';
+import { MailService } from '../mail/mail.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { SendCodeDto } from './dto/send-code.dto';
+import { Code, CodeDocument } from './schemas/code.schema';
+import { CheckCodeDto } from './dto/check-code.dto';
 
 @Injectable()
 export class AuthService {
     constructor(
         private userService: UsersService,
         private tokensService: TokensService,
-        private jwtService: JwtService
+        private mailService: MailService,
+        private jwtService: JwtService,
+        @InjectModel(Code.name) private codeModel: Model<CodeDocument>
     ) {}
+
+    async checkUserUnique(userData: UserUniqueDto): Promise<UserUniqueResponse> {
+        const { email, username } = userData;
+
+        if (!email && !username) throw new NotFoundException();
+
+        const res: UserUniqueResponse = {};
+
+        if (email) {
+            res.emailExist = !!(await this.userService.checkUserUnicity({ email }));
+        }
+
+        if (username) {
+            res.usernameExist = !!(await this.userService.checkUserUnicity({ username }));
+        }
+
+        return res;
+    }
+
+    async sendCode(sendCodeDto: SendCodeDto): Promise<SendCodeResponseType> {
+        const code = Math.floor(100000 + Math.random() * 900000);
+
+        const preparedCode = new this.codeModel({ code });
+        const createdCode = await preparedCode.save();
+
+        await this.mailService.sendCode(sendCodeDto, code);
+
+        return { codeId: createdCode.id };
+    }
+
+    async checkCode({ codeId, code }: CheckCodeDto): Promise<boolean> {
+        const foundCode = await this.codeModel.findById(codeId);
+
+        if (!foundCode) throw new NotFoundException('Code doesn`t exist.');
+
+        if (foundCode.code !== code) throw new ForbiddenException('Codes not matches.');
+
+        await this.codeModel.findByIdAndRemove(codeId);
+
+        return true;
+    }
 
     async signUpLocal(userData: UserDto): Promise<AuthResponse> {
         const { email, username } = userData;
@@ -64,24 +122,15 @@ export class AuthService {
         return { ...tokens, userId };
     }
 
-    async clearTokensPair(
-        userId: string,
-        userToken: string,
-        tokenKey: 'accessToken' | 'refreshToken'
-    ) {
-        const tokens = await this.tokensService.getTokens(userId);
-
-        if (!tokens || !tokens.accessToken || !tokens.refreshToken) {
-            throw new UnauthorizedException('Access Denied');
-        }
-
-        const atMatches = await bcrypt.compare(userToken, tokens[tokenKey]);
+    async clearTokensPair(userId: string, userToken: string, tokenKey: TokensEnum) {
+        const atMatches = await this.tokensService.compareTokens(userId, userToken, tokenKey);
 
         if (!atMatches) {
             throw new UnauthorizedException('Tokens don`t matches.');
         }
 
         await this.tokensService.removeTokens(userId);
+
         return HttpStatus.NO_CONTENT;
     }
 
